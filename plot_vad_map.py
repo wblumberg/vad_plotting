@@ -54,7 +54,7 @@ def getNexrad(site_locations):
         lons.append(float(site_string[6]))
     return locs, lats, lons
 
-sites = np.load('WMOStationDatabase.npz')
+sites = np.load('/data/soundings/scripts/WMOStationDatabase.npz')
 locs, lats, lons = getNexrad(sites)
 
 """
@@ -87,6 +87,7 @@ print ref.max(), ref.min()
 plt.pcolormesh(ref_x, ref_y, ref, cmap=gfy.grayify_cmap('autumn_r'), vmin=30, vmax=70)
 """
 
+data_prefix = '/data/soundings/vad/'
 offset = 1e4
 for loc, lat, lon in zip(locs, lats, lons):
     gc.collect()
@@ -98,16 +99,32 @@ for loc, lat, lon in zip(locs, lats, lons):
     print " Plotting", loc
     loc = loc.lower()
     try:
-        vad = VADDecoder(loc + '.txt')
+        vad = VADDecoder(data_prefix + loc + '.txt')
+        profs = vad.getProfiles(prof_type='vad')
     except:
         print " Can't find a file for", loc
-    profs = vad.getProfiles(prof_type='vad')
+        continue
+
     vad_prof = profs[-1]
-    u6km = interp.generic_interp_hght(6000, vad_prof.hght, vad_prof.u, log=False)
-    v6km = interp.generic_interp_hght(6000, vad_prof.hght, vad_prof.v, log=False)
     
-    u1km = interp.generic_interp_hght(1000, vad_prof.hght, vad_prof.u, log=False)
-    v1km = interp.generic_interp_hght(1000, vad_prof.hght, vad_prof.v, log=False)
+    print vad_prof.rms, vad_prof.hght 
+    rms6km = interp.generic_interp_hght(6000, vad_prof.hght, np.ma.asarray(vad_prof.rms), log=False)
+   
+    if rms6km < 5:
+        u6km = interp.generic_interp_hght(6000, vad_prof.hght, vad_prof.u, log=False)
+        v6km = interp.generic_interp_hght(6000, vad_prof.hght, vad_prof.v, log=False)
+    else:
+        u6km = np.nan
+        v6km = np.nan
+    
+    rms1km = interp.generic_interp_hght(1000, vad_prof.hght, np.ma.asarray(vad_prof.rms), log=False)
+    if rms1km < 5:
+        u1km = interp.generic_interp_hght(1000, vad_prof.hght, vad_prof.u, log=False)
+        v1km = interp.generic_interp_hght(1000, vad_prof.hght, vad_prof.v, log=False)
+    else:
+        u1km = np.nan
+        v1km = np.nan    
+
     print u1km, v1km
     print u6km, v6km
     print 
@@ -125,10 +142,16 @@ for loc, lat, lon in zip(locs, lats, lons):
     except:
         print "Unable to plot 1 km winds"
 
-map_details_x, map_details_y = m(-95,24) 
-#plt.text(map_details_x, map_details_y, str(level) + ' mb ' + datetime.strftime(dt, "%Y%m%d/%H%M"), fontsize=18, fontweight='bold', fontstyle='italic') 
+utcnow = datetime.strftime(datetime.utcnow(), 'Most Recent WSR-88D VAD Winds As Of: %Y/%m/%d %H:%M UTC')
+
+plt.text(0.5, .98, utcnow, transform=plt.gca().transAxes,horizontalalignment='center', fontsize=16, bbox=dict(facecolor='white', alpha=0.7))
+
+plt.text(.85, .1, '1 km AGL Wind (kts)', color='red', transform=plt.gca().transAxes, fontsize=12, fontweight='bold', fontstyle='italic') 
+plt.text(.85, .07, '6 km AGL Wind (kts)', color='blue', transform=plt.gca().transAxes, fontsize=12, fontweight='bold', fontstyle='italic') 
+
 plt.tight_layout()
-plt.savefig('thing.png', bbox_inches='tight', pad_inches=0)
+data_out = '/data/soundings/http/blumberg/'
+plt.savefig(data_out + 'vad.png', bbox_inches='tight', pad_inches=0)
 #plt.show()
 #plt.savefig(datetime.strftime(dt, '%Y%m%d_%H_') + str(int(level)) + '.pdf',bbox_inches='tight', pad_inches=0)
 
